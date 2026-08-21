@@ -39,10 +39,10 @@ CREATE TABLE IF NOT EXISTS files (
 CREATE INDEX IF NOT EXISTS idx_submissions_created_at ON submissions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_files_submission_id ON files(submission_id);
 
--- Optional Row Level Security (RLS)
-ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE files ENABLE ROW LEVEL SECURITY;
-ALTER TABLE storage_accounts ENABLE ROW LEVEL SECURITY;
+-- Disable RLS so Next.js server can read and write without policy blocks
+ALTER TABLE submissions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE files DISABLE ROW LEVEL SECURITY;
+ALTER TABLE storage_accounts DISABLE ROW LEVEL SECURITY;
 
 -- Default storage account seed
 INSERT INTO storage_accounts (id, name, provider, is_active, configuration_reference)
