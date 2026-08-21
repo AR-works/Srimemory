@@ -6,12 +6,15 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET() {
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+
   const diagnostics: Record<string, any> = {
     timestamp: new Date().toISOString(),
     envCheck: {
       has_S_PIN: Boolean(process.env.S_PIN),
       has_SESSION_SECRET: Boolean(process.env.SESSION_SECRET),
-      has_NEXT_PUBLIC_SUPABASE_URL: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL),
+      has_NEXT_PUBLIC_SUPABASE_URL: Boolean(rawUrl),
+      supabaseUrlPreview: rawUrl ? `${rawUrl.substring(0, 18)}...` : 'missing',
       has_NEXT_PUBLIC_SUPABASE_ANON_KEY: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY),
       has_SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
       has_GOOGLE_CLIENT_ID: Boolean(process.env.GOOGLE_CLIENT_ID),
@@ -29,11 +32,11 @@ export async function GET() {
     diagnostics.supabaseStatus = 'FAILED: Supabase environment variables are missing on Vercel.';
   } else {
     try {
-      const { data, error } = await supabase.from('submissions').select('id, count', { count: 'exact' });
+      const { data, error } = await supabase.from('submissions').select('id');
       if (error) {
         diagnostics.supabaseStatus = `ERROR from Supabase: ${error.message} (code: ${error.code})`;
       } else {
-        diagnostics.supabaseStatus = `CONNECTED: Successfully queried 'submissions' table. Row count: ${data.length}`;
+        diagnostics.supabaseStatus = `CONNECTED: Successfully queried 'submissions' table! Found ${data.length} existing memories.`;
       }
     } catch (err: any) {
       diagnostics.supabaseStatus = `EXCEPTION connecting to Supabase: ${err.message}`;
