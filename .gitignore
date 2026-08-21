@@ -37,5 +37,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local uploads
+# local uploads & local database
 .storage_uploads/
+.local_db/

@@ -19,7 +19,7 @@ export const ENCOURAGEMENT_MESSAGES: EncouragementMessage[] = [
   },
   {
     id: 4,
-    text: "The kindness you give so effortlessly never goes unnoticed, S.",
+    text: "The kindness you give so effortlessly never goes unnoticed, Sri.",
     tone: "heartfelt",
   },
   {
@@ -253,7 +253,7 @@ export const ENCOURAGEMENT_MESSAGES: EncouragementMessage[] = [
   },
   {
     id: 50,
-    text: "One step at a time, S. You're building a gorgeous life, brick by brick.",
+    text: "One step at a time, Sri. You're building a gorgeous life, brick by brick.",
     tone: "confidence",
   },
   {
@@ -405,7 +405,7 @@ export const ENCOURAGEMENT_MESSAGES: EncouragementMessage[] = [
   },
   {
     id: 80,
-    text: "A toast to you, S: the most loyal, hilarious, and radiant human we know.",
+    text: "A toast to you, Sri: the most loyal, hilarious, and radiant human we know.",
     tone: "friendship",
   },
 
@@ -427,7 +427,7 @@ export const ENCOURAGEMENT_MESSAGES: EncouragementMessage[] = [
   },
   {
     id: 84,
-    text: "Own your story, S. It's turning into a masterpiece.",
+    text: "Own your story, Sri. It's turning into a masterpiece.",
     tone: "confidence",
   },
   {
@@ -507,7 +507,7 @@ export const ENCOURAGEMENT_MESSAGES: EncouragementMessage[] = [
   },
   {
     id: 100,
-    text: "Happy Birthday, S! Thank you for being our favorite human. 💜✨",
+    text: "Happy Birthday, Sri! Thank you for being our favorite human. 💜✨",
     tone: "heartfelt",
   },
 ];

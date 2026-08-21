@@ -17,18 +17,9 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // If already authenticated and visiting PIN entrance, redirect to gallery
-  if (pathname === '/s') {
-    if (isAuthenticated) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/s/gallery';
-      return NextResponse.redirect(url);
-    }
-  }
-
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/s', '/s/gallery/:path*'],
+  matcher: ['/s/gallery/:path*'],
 };

@@ -11,18 +11,21 @@ import {
   Download,
   Play,
   User,
+  Trash2,
 } from 'lucide-react';
 
 interface FileCardProps {
   file: FileMetadata;
   submission?: Submission;
   onPlayVideo?: (file: FileMetadata, sub?: Submission) => void;
+  onDelete?: (fileId: string) => void;
 }
 
 export const FileCard: React.FC<FileCardProps> = ({
   file,
   submission,
   onPlayVideo,
+  onDelete,
 }) => {
   const isPdf = file.mime_type === 'application/pdf' || file.original_filename.toLowerCase().endsWith('.pdf');
   const isVideo = file.mime_type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.original_filename);
@@ -34,12 +37,12 @@ export const FileCard: React.FC<FileCardProps> = ({
       : submission.display_name;
 
   return (
-    <div className="group relative bg-white/95 dark:bg-purple-950/80 p-5 rounded-3xl border border-purple-100/90 dark:border-purple-800/80 shadow-soft-sm hover:shadow-soft-md transition-all duration-300 flex flex-col justify-between">
+    <div className="group relative bg-white/95 dark:bg-purple-950/80 p-4 sm:p-5 rounded-3xl border border-purple-100/90 dark:border-purple-800/80 shadow-soft-sm hover:shadow-soft-md transition-all duration-300 flex flex-col justify-between">
       <div>
         {/* Header Icon & Type */}
         <div className="flex items-start justify-between mb-3.5">
           <div
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center ${
               isPdf
                 ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-500'
                 : isVideo
@@ -48,36 +51,49 @@ export const FileCard: React.FC<FileCardProps> = ({
             }`}
           >
             {isPdf ? (
-              <FileText className="w-6 h-6" />
+              <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
             ) : isVideo ? (
-              <Video className="w-6 h-6" />
+              <Video className="w-5 h-5 sm:w-6 sm:h-6" />
             ) : (
-              <GenericFile className="w-6 h-6" />
+              <GenericFile className="w-5 h-5 sm:w-6 sm:h-6" />
             )}
           </div>
 
-          <span
-            className={`text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full ${
-              isPdf
-                ? 'bg-rose-100/70 dark:bg-rose-900/70 text-rose-700 dark:text-rose-200'
-                : isVideo
-                ? 'bg-pink-100/70 dark:bg-pink-900/70 text-pink-700 dark:text-pink-200'
-                : 'bg-purple-100/70 dark:bg-purple-900/70 text-purple-700 dark:text-purple-200'
-            }`}
-          >
-            {isPdf ? 'PDF Document' : isVideo ? 'Video' : 'File'}
-          </span>
+          <div className="flex items-center space-x-1.5">
+            <span
+              className={`text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full ${
+                isPdf
+                  ? 'bg-rose-100/70 dark:bg-rose-900/70 text-rose-700 dark:text-rose-200'
+                  : isVideo
+                  ? 'bg-pink-100/70 dark:bg-pink-900/70 text-pink-700 dark:text-pink-200'
+                  : 'bg-purple-100/70 dark:bg-purple-900/70 text-purple-700 dark:text-purple-200'
+              }`}
+            >
+              {isPdf ? 'PDF' : isVideo ? 'Video' : 'File'}
+            </span>
+
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(file.id)}
+                className="p-1 text-purple-300 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer"
+                title="Delete file"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* File Name & Meta */}
         <h4
-          className="text-sm font-semibold text-purple-950 dark:text-purple-100 truncate mb-1"
+          className="text-xs sm:text-sm font-semibold text-purple-950 dark:text-purple-100 truncate mb-1"
           title={file.original_filename}
         >
           {file.original_filename}
         </h4>
 
-        <div className="flex items-center space-x-2 text-xs text-purple-500/80 dark:text-purple-400/80 mb-4">
+        <div className="flex items-center space-x-2 text-[11px] sm:text-xs text-purple-500/80 dark:text-purple-400/80 mb-3 sm:mb-4">
           <span>{formatBytes(file.file_size)}</span>
           <span>•</span>
           <span>{formatDate(file.created_at)}</span>

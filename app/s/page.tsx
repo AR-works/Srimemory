@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { FloralWreath } from '@/components/visuals/FloralWreath';
-import { Heart, Lock, KeyRound, ArrowRight, Loader2, Sparkles, ArrowLeft } from 'lucide-react';
+import { Heart, Lock, KeyRound, ArrowRight, Loader2, Sparkles, ArrowLeft, Unlock, LogOut } from 'lucide-react';
 
 export default function SPrivateEntrancePage() {
   const router = useRouter();
@@ -13,6 +13,13 @@ export default function SPrivateEntrancePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [unlockedSuccess, setUnlockedSuccess] = useState(false);
+  const [hasExistingSession, setHasExistingSession] = useState(false);
+
+  useEffect(() => {
+    // Check if session cookie exists
+    const hasCookie = document.cookie.includes('s_session=');
+    setHasExistingSession(hasCookie);
+  }, []);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +51,15 @@ export default function SPrivateEntrancePage() {
       );
       setIsLoading(false);
     }
+  };
+
+  const handleLockSession = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    setHasExistingSession(false);
   };
 
   return (
@@ -81,9 +97,47 @@ export default function SPrivateEntrancePage() {
                 Opening your garden of memories...
               </p>
             </div>
+          ) : hasExistingSession ? (
+            /* Active Session Prompt */
+            <div className="py-2 space-y-5 animate-in fade-in">
+              <div className="relative inline-flex mb-2">
+                <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-3xl bg-purple-100 dark:bg-purple-900/80 flex items-center justify-center text-purple-600 dark:text-purple-300 shadow-soft-sm">
+                  <Unlock className="w-9 h-9" />
+                </div>
+                <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-amber-400 animate-sparkle" />
+              </div>
+
+              <div>
+                <h1 className="text-2xl font-bold text-purple-950 dark:text-purple-50 tracking-tight">
+                  Welcome back, Sri 💜
+                </h1>
+                <p className="text-xs sm:text-sm text-purple-700/80 dark:text-purple-300/80 mt-1">
+                  Your session is currently unlocked.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <Link
+                  href="/s/gallery"
+                  className="w-full py-3.5 px-6 bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 text-white font-semibold rounded-2xl shadow-soft-md hover:shadow-soft-lg transition-all flex items-center justify-center space-x-2"
+                >
+                  <span>Open Memory Box</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={handleLockSession}
+                  className="w-full py-2.5 px-4 bg-white/80 dark:bg-purple-900/40 hover:bg-white text-xs font-semibold text-purple-700 dark:text-purple-300 rounded-xl border border-purple-200 dark:border-purple-800 transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Lock &amp; Enter PIN Again</span>
+                </button>
+              </div>
+            </div>
           ) : (
+            /* PIN Input Form */
             <>
-              {/* Cute Animated Lock */}
               <div className="relative inline-flex mb-6">
                 <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-purple-200 to-pink-100 dark:from-purple-900 dark:to-pink-950 flex items-center justify-center text-purple-600 dark:text-purple-300 shadow-soft-sm">
                   <Lock className="w-9 h-9" />
@@ -91,7 +145,6 @@ export default function SPrivateEntrancePage() {
                 <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-amber-400 animate-sparkle" />
               </div>
 
-              {/* Headings */}
               <h1 className="text-2xl sm:text-3xl font-bold text-purple-950 dark:text-purple-50 tracking-tight mb-2">
                 Hey Sri 💜
               </h1>
@@ -105,7 +158,6 @@ export default function SPrivateEntrancePage() {
                 </div>
               )}
 
-              {/* Form */}
               <form onSubmit={handleVerify} className="space-y-4">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-purple-400">

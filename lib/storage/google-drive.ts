@@ -8,12 +8,23 @@ const folderCache: Record<string, string> = {};
 function getDriveClient(): drive_v3.Drive {
   if (cachedDriveClient) return cachedDriveClient;
 
-  const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n');
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
+  if (clientId && clientSecret && refreshToken) {
+    const oauth2Client = new google.auth.OAuth2(
+      clientId,
+      clientSecret,
+      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google/callback'
+    );
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+    cachedDriveClient = google.drive({ version: 'v3', auth: oauth2Client });
+    return cachedDriveClient;
+  }
+
+  const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n');
   if (serviceAccountEmail && privateKey) {
     const auth = new google.auth.JWT({
       email: serviceAccountEmail,
@@ -21,17 +32,6 @@ function getDriveClient(): drive_v3.Drive {
       scopes: ['https://www.googleapis.com/auth/drive.file'],
     });
     cachedDriveClient = google.drive({ version: 'v3', auth });
-    return cachedDriveClient;
-  }
-
-  if (clientId && clientSecret && refreshToken) {
-    const oauth2Client = new google.auth.OAuth2(
-      clientId,
-      clientSecret,
-      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000'
-    );
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    cachedDriveClient = google.drive({ version: 'v3', auth: oauth2Client });
     return cachedDriveClient;
   }
 
@@ -88,7 +88,7 @@ export class GoogleDriveStorageProvider implements StorageProvider {
   private accountName: string;
   private rootFolderId: string;
 
-  constructor(accountName: string = 'primary_drive') {
+  constructor(accountName: string = 'primary_google_drive') {
     this.accountName = accountName;
     this.rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || 'root';
   }
@@ -141,6 +141,19 @@ export class GoogleDriveStorageProvider implements StorageProvider {
       { responseType: 'stream' }
     );
     return res.data as unknown as Readable;
+  }
+
+  async getFileMetadata(storageFileId: string): Promise<{ mimeType: string; name: string; size?: number }> {
+    const drive = getDriveClient();
+    const res = await drive.files.get({
+      fileId: storageFileId,
+      fields: 'mimeType, name, size',
+    });
+    return {
+      mimeType: res.data.mimeType || 'application/octet-stream',
+      name: res.data.name || 'file',
+      size: res.data.size ? parseInt(res.data.size, 10) : undefined,
+    };
   }
 
   async getDownloadUrl(storageFileId: string): Promise<string> {

@@ -15,7 +15,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 function getResolvedThemeFromTime(): ResolvedTheme {
   const hour = new Date().getHours();
-  // Morning & Afternoon (6 AM to 5 PM): Light
+  // Morning & Daytime (6 AM to 5 PM): Light
   if (hour >= 6 && hour < 17) {
     return 'light';
   }
@@ -42,8 +42,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Apply classes to document html/body
     const root = document.documentElement;
-    root.classList.remove('theme-light', 'theme-evening', 'theme-dark');
+    root.classList.remove('theme-light', 'theme-evening', 'theme-dark', 'dark');
+
     root.classList.add(`theme-${resolved}`);
+    if (resolved === 'dark' || resolved === 'evening') {
+      root.classList.add('dark');
+    }
   }, []);
 
   useEffect(() => {

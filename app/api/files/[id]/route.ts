@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStorageProvider } from '@/lib/storage';
+import { GoogleDriveStorageProvider } from '@/lib/storage/google-drive';
 import { Readable } from 'stream';
 
 export const runtime = 'nodejs';
@@ -59,6 +60,23 @@ startxref
 
   try {
     const storageProvider = getStorageProvider();
+    let contentType = 'application/octet-stream';
+    let filename = 'download';
+
+    if (storageProvider instanceof GoogleDriveStorageProvider) {
+      try {
+        const meta = await storageProvider.getFileMetadata(fileId);
+        contentType = meta.mimeType;
+        filename = meta.name;
+      } catch (e) {
+        console.warn('Could not fetch Drive file metadata:', e);
+      }
+    } else {
+      if (fileId.endsWith('.pdf')) contentType = 'application/pdf';
+      else if (/\.(jpg|jpeg|png|webp|gif)$/i.test(fileId)) contentType = 'image/jpeg';
+      else if (/\.(mp4|mov|webm)$/i.test(fileId)) contentType = 'video/mp4';
+    }
+
     const stream = await storageProvider.getFileStream(fileId);
 
     // Convert NodeJS.ReadableStream to Web ReadableStream
@@ -70,18 +88,10 @@ startxref
       },
     });
 
-    const isPdf = fileId.endsWith('.pdf');
-    const isImage = /\.(jpg|jpeg|png|webp|gif)$/i.test(fileId);
-    const isVideo = /\.(mp4|mov|webm)$/i.test(fileId);
-
-    let contentType = 'application/octet-stream';
-    if (isPdf) contentType = 'application/pdf';
-    else if (isImage) contentType = 'image/jpeg';
-    else if (isVideo) contentType = 'video/mp4';
-
     return new NextResponse(webStream, {
       headers: {
         'Content-Type': contentType,
+        'Content-Disposition': `inline; filename="${filename}"`,
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     });

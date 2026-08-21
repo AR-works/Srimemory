@@ -3,13 +3,14 @@
 import React from 'react';
 import { Submission, FileMetadata } from '@/types';
 import { formatDate } from '@/lib/utils';
-import { Heart, User, FileText, Video, Download } from 'lucide-react';
+import { Heart, User, FileText, Video, Download, Trash2 } from 'lucide-react';
 
 interface StoryCardProps {
   submission: Submission;
   onSelectPhoto: (file: FileMetadata, submission: Submission) => void;
   onSelectMessage: (submission: Submission) => void;
   onPlayVideo: (file: FileMetadata, submission: Submission) => void;
+  onDelete?: (submissionId: string) => void;
 }
 
 export const StoryCard: React.FC<StoryCardProps> = ({
@@ -17,6 +18,7 @@ export const StoryCard: React.FC<StoryCardProps> = ({
   onSelectPhoto,
   onSelectMessage,
   onPlayVideo,
+  onDelete,
 }) => {
   const authorName =
     submission.is_anonymous || !submission.display_name
@@ -36,21 +38,31 @@ export const StoryCard: React.FC<StoryCardProps> = ({
   );
 
   return (
-    <div className="glass-panel p-6 sm:p-7 rounded-3xl border border-purple-100/90 dark:border-purple-850 shadow-soft-md space-y-5">
+    <div className="glass-panel p-5 sm:p-7 rounded-3xl border border-purple-100/90 dark:border-purple-800/80 shadow-soft-md space-y-4 sm:space-y-5">
       {/* Contributor Header */}
-      <div className="flex items-center justify-between border-b border-purple-100/80 dark:border-purple-800/60 pb-4">
+      <div className="flex items-center justify-between border-b border-purple-100/80 dark:border-purple-800/60 pb-3 sm:pb-4">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-2xl bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600 dark:text-purple-300 font-bold text-sm">
             <User className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-purple-950 dark:text-purple-50">{authorName}</h3>
+            <h3 className="text-sm sm:text-base font-bold text-purple-950 dark:text-purple-50">{authorName}</h3>
             <p className="text-xs text-purple-500 dark:text-purple-400">{formatDate(submission.created_at)}</p>
           </div>
         </div>
 
-        <div className="flex items-center space-x-1.5 text-xs text-purple-400">
+        <div className="flex items-center space-x-2">
           <Heart className="w-4 h-4 fill-purple-200 dark:fill-purple-900 text-purple-400" />
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(submission.id)}
+              className="p-1.5 text-purple-300 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-xl transition-colors cursor-pointer"
+              title="Delete this memory"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 

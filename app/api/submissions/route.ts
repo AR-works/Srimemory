@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllSubmissions, createSubmission } from '@/lib/db/repository';
+import { getAllSubmissions, createSubmission, deleteSubmission } from '@/lib/db/repository';
 import { isSAuthenticatedFromRequest } from '@/lib/auth/pin';
 import { ContributorSubmissionPayload } from '@/types';
 
@@ -7,11 +7,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  // Only S can view the submissions
+  // Only Sri can view the submissions
   const isAuth = isSAuthenticatedFromRequest(request);
   if (!isAuth) {
     return NextResponse.json(
-      { error: 'Unauthorized. Please enter S secret PIN.' },
+      { error: 'Unauthorized. Please enter Sri secret PIN.' },
       { status: 401 }
     );
   }
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     if (!body || typeof body.message !== 'string' || body.message.trim().length === 0) {
       return NextResponse.json(
-        { error: 'Please write a little message for S before submitting 💜' },
+        { error: 'Please write a little message for Sri before submitting 💜' },
         { status: 400 }
       );
     }
@@ -58,12 +58,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       submissionId: submission.id,
-      message: "It's in 💜 S has one more reason to smile now.",
+      message: "It's in 💜 Sri has one more reason to smile now.",
     });
   } catch (error) {
     console.error('Error creating submission:', error);
     return NextResponse.json(
       { error: 'Something went wrong while saving that 💔 Try again in a moment.' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  // Only authenticated Sri can delete memories
+  const isAuth = isSAuthenticatedFromRequest(request);
+  if (!isAuth) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Only Sri can delete memories.' },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Submission ID is required.' }, { status: 400 });
+    }
+
+    await deleteSubmission(id);
+    return NextResponse.json({ success: true, message: 'Memory deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting submission:', error);
+    return NextResponse.json(
+      { error: 'Something went wrong while deleting memory 💔' },
       { status: 500 }
     );
   }
