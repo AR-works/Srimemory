@@ -18,8 +18,7 @@ async function readLocalSubmissions(): Promise<Submission[]> {
     }
     const data = await fs.readFile(LOCAL_DB_FILE, 'utf-8');
     return JSON.parse(data);
-  } catch (err) {
-    console.error('Error reading local submissions:', err);
+  } catch {
     return [];
   }
 }
@@ -45,9 +44,13 @@ export async function getAllSubmissions(): Promise<Submission[]> {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (subError) throw subError;
+      if (subError) {
+        console.error('Supabase query error on submissions table:', subError);
+        throw subError;
+      }
+
       if (!submissions || submissions.length === 0) {
-        return await readLocalSubmissions();
+        return [];
       }
 
       const { data: files, error: filesError } = await supabase
@@ -55,7 +58,9 @@ export async function getAllSubmissions(): Promise<Submission[]> {
         .select('*')
         .order('created_at', { ascending: true });
 
-      if (filesError) throw filesError;
+      if (filesError) {
+        console.error('Supabase query error on files table:', filesError);
+      }
 
       const filesMap = new Map<string, FileMetadata[]>();
       (files || []).forEach((file: FileMetadata) => {
@@ -69,7 +74,7 @@ export async function getAllSubmissions(): Promise<Submission[]> {
         files: filesMap.get(sub.id) || [],
       }));
     } catch (err) {
-      console.warn('Supabase query failed, using local persistent store:', err);
+      console.error('Supabase getAllSubmissions failed:', err);
       return await readLocalSubmissions();
     }
   }
@@ -109,42 +114,44 @@ export async function createSubmission(payload: ContributorSubmissionPayload): P
   };
 
   if (supabase) {
-    try {
-      const { error: subError } = await supabase
-        .from('submissions')
-        .insert({
-          id: submissionId,
-          display_name: displayName,
-          internal_name: internalName,
-          is_anonymous: isAnon,
-          message: payload.message.trim(),
-          created_at: now,
-        });
+    const { error: subError } = await supabase
+      .from('submissions')
+      .insert({
+        id: submissionId,
+        display_name: displayName,
+        internal_name: internalName,
+        is_anonymous: isAnon,
+        message: payload.message.trim(),
+        created_at: now,
+      });
 
-      if (subError) throw subError;
+    if (subError) {
+      console.error('CRITICAL: Supabase insert error on submissions:', subError);
+      throw new Error(`Database insert failed: ${subError.message}`);
+    }
 
-      if (payload.files.length > 0) {
-        const fileRows = newSubmission.files!.map((f) => ({
-          id: f.id,
-          submission_id: submissionId,
-          storage_provider: f.storage_provider,
-          storage_account: f.storage_account,
-          storage_file_id: f.storage_file_id,
-          original_filename: f.original_filename,
-          mime_type: f.mime_type,
-          file_size: f.file_size,
-          created_at: now,
-        }));
+    if (payload.files.length > 0) {
+      const fileRows = newSubmission.files!.map((f) => ({
+        id: f.id,
+        submission_id: submissionId,
+        storage_provider: f.storage_provider,
+        storage_account: f.storage_account,
+        storage_file_id: f.storage_file_id,
+        original_filename: f.original_filename,
+        mime_type: f.mime_type,
+        file_size: f.file_size,
+        created_at: now,
+      }));
 
-        const { error: fileError } = await supabase.from('files').insert(fileRows);
-        if (fileError) throw fileError;
+      const { error: fileError } = await supabase.from('files').insert(fileRows);
+      if (fileError) {
+        console.error('CRITICAL: Supabase insert error on files:', fileError);
+        throw new Error(`File metadata insert failed: ${fileError.message}`);
       }
-    } catch (err) {
-      console.warn('Supabase insert failed, saving to local store:', err);
     }
   }
 
-  // Always save to local persistent store so data is never lost in dev
+  // Local fallback
   const current = await readLocalSubmissions();
   current.unshift(newSubmission);
   await writeLocalSubmissions(current);
@@ -173,7 +180,7 @@ export async function deleteSubmission(submissionId: string): Promise<boolean> {
     try {
       await supabase.from('submissions').delete().eq('id', submissionId);
     } catch (err) {
-      console.warn('Supabase delete failed:', err);
+      console.error('Supabase delete failed:', err);
     }
   }
 
@@ -207,7 +214,7 @@ export async function deleteFile(fileId: string): Promise<boolean> {
     try {
       await supabase.from('files').delete().or(`id.eq.${fileId},storage_file_id.eq.${fileId}`);
     } catch (err) {
-      console.warn('Supabase file delete failed:', err);
+      console.error('Supabase file delete failed:', err);
     }
   }
 
