@@ -8,13 +8,16 @@ export async function GET(request: NextRequest) {
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   const origin = request.nextUrl.origin;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${origin}/api/auth/google/callback`;
+  // If on Vercel/production, always use the current domain's callback URL
+  const redirectUri = origin.includes('localhost')
+    ? (process.env.GOOGLE_REDIRECT_URI || `${origin}/api/auth/google/callback`)
+    : `${origin}/api/auth/google/callback`;
 
   if (!clientId || !clientSecret) {
     return NextResponse.json(
       {
         error:
-          'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are missing in your environment variables. Please add them to .env.local first.',
+          'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are missing in your environment variables.',
       },
       { status: 400 }
     );
@@ -24,9 +27,9 @@ export async function GET(request: NextRequest) {
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    prompt: 'select_account consent', // Allows selecting the exact Google account and forces refresh_token
+    prompt: 'consent', // Forces refresh_token to always be returned
     scope: [
-      'https://www.googleapis.com/auth/drive', // Full Drive access to upload into any custom folder
+      'https://www.googleapis.com/auth/drive',
     ],
   });
 

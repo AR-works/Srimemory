@@ -34,7 +34,9 @@ export async function GET(request: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const origin = request.nextUrl.origin;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${origin}/api/auth/google/callback`;
+  const redirectUri = origin.includes('localhost')
+    ? (process.env.GOOGLE_REDIRECT_URI || `${origin}/api/auth/google/callback`)
+    : `${origin}/api/auth/google/callback`;
 
   try {
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
@@ -43,24 +45,22 @@ export async function GET(request: NextRequest) {
     const refreshToken = tokens.refresh_token;
 
     if (refreshToken) {
-      // Save refresh token directly to .env.local
-      const envPath = path.join(process.cwd(), '.env.local');
-      let envContent = '';
+      // Save refresh token locally in dev if file exists
       try {
-        envContent = await fs.readFile(envPath, 'utf-8');
+        const envPath = path.join(process.cwd(), '.env.local');
+        let envContent = await fs.readFile(envPath, 'utf-8');
+        if (envContent.includes('GOOGLE_REFRESH_TOKEN=')) {
+          envContent = envContent.replace(
+            /GOOGLE_REFRESH_TOKEN=.*/,
+            `GOOGLE_REFRESH_TOKEN=${refreshToken}`
+          );
+        } else {
+          envContent += `\nGOOGLE_REFRESH_TOKEN=${refreshToken}\n`;
+        }
+        await fs.writeFile(envPath, envContent, 'utf-8');
       } catch {
-        envContent = '';
+        // Ignored on read-only environments like Vercel
       }
-
-      if (envContent.includes('GOOGLE_REFRESH_TOKEN=')) {
-        envContent = envContent.replace(
-          /GOOGLE_REFRESH_TOKEN=.*/,
-          `GOOGLE_REFRESH_TOKEN=${refreshToken}`
-        );
-      } else {
-        envContent += `\nGOOGLE_REFRESH_TOKEN=${refreshToken}\n`;
-      }
-      await fs.writeFile(envPath, envContent, 'utf-8');
     }
 
     // Test Google Drive connection live with tokens
@@ -93,7 +93,6 @@ export async function GET(request: NextRequest) {
         }
       }
     } catch (folderErr) {
-      console.warn('Folder subcheck notice:', folderErr);
       folderInfo = `Folder check: ${folderErr instanceof Error ? folderErr.message : String(folderErr)}`;
     }
 
@@ -117,7 +116,7 @@ export async function GET(request: NextRequest) {
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h1>Google Drive Connected! 🎉</h1>
-      <span class="badge">Live &amp; Ready</span>
+      <span class="badge">Permanent Token Generated</span>
     </div>
     
     <div class="status-box">
@@ -126,9 +125,26 @@ export async function GET(request: NextRequest) {
       Subfolders <code>Photos/</code>, <code>Videos/</code>, <code>PDFs/</code> are ready.
     </div>
 
-    <p style="font-size:13px; color:#6B21A8;">
-      The refresh token has been automatically saved to your <code>.env.local</code>. Any memory or file submitted on the website will now upload directly into your Google Drive!
-    </p>
+    ${
+      refreshToken
+        ? `
+      <p style="font-size:13px; color:#4C1D95; font-weight:600;">
+        Here is your permanent Google Refresh Token:
+      </p>
+      <div class="token-box" id="tokenBox">${refreshToken}</div>
+      <button class="btn" onclick="navigator.clipboard.writeText(document.getElementById('tokenBox').innerText); alert('Copied to clipboard! ✨');">
+        Copy Refresh Token
+      </button>
+      <p style="font-size:12px; color:#6B21A8; margin-top:14px;">
+        👉 Now update <code>GOOGLE_REFRESH_TOKEN</code> in your <strong>Vercel Settings ➔ Environment Variables</strong> with this value!
+      </p>
+      `
+        : `
+      <p style="font-size:13px; color:#15803D;">
+        Connected! If you need a new refresh token, revoke access in your Google Account and try again.
+      </p>
+      `
+    }
 
     <div style="margin-top:24px; border-top:1px solid #F3E8FF; padding-top:16px; display:flex; gap:12px;">
       <a href="/" class="btn" style="background:#581C87;">Go to Homepage</a>
