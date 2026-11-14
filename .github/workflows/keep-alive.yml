@@ -1,10 +1,7 @@
-name: Keep Supabase Alive
+name: Manual Health Check
 
 on:
-  schedule:
-    # Runs 3 times a day (every 8 hours: 00:00, 08:00, 16:00 UTC)
-    - cron: '0 0,8,16 * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub Actions tab anytime
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab if ever needed
 
 jobs:
   ping-health:
@@ -12,7 +9,7 @@ jobs:
     steps:
       - name: Ping Health Endpoint
         run: |
-          echo "Pinging Sri Memory health endpoint to keep Supabase active..."
+          echo "Pinging Sri Memory health endpoint..."
           RESPONSE=$(curl -s https://srimemory.vercel.app/api/health)
           echo "Response from server:"
           echo "$RESPONSE"

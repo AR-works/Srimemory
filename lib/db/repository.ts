@@ -1,5 +1,6 @@
 import { Submission, FileMetadata, ContributorSubmissionPayload } from '@/types';
 import { getSupabaseClient } from './supabase';
+import { readSubmissionsFromDrive, writeSubmissionsToDrive } from './drive-db';
 import { getStorageProvider } from '@/lib/storage';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -34,56 +35,86 @@ async function writeLocalSubmissions(submissions: Submission[]): Promise<void> {
   }
 }
 
-export async function getAllSubmissions(): Promise<Submission[]> {
+/**
+ * Fetch from Supabase as a fallback / migration source.
+ */
+async function getSupabaseSubmissions(): Promise<Submission[] | null> {
   const supabase = getSupabaseClient();
+  if (!supabase) return null;
 
-  if (supabase) {
-    try {
-      const { data: submissions, error: subError } = await supabase
-        .from('submissions')
-        .select('*')
-        .order('created_at', { ascending: false });
+  try {
+    const { data: submissions, error: subError } = await supabase
+      .from('submissions')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (subError) {
-        console.error('Supabase query error on submissions table:', subError);
-        throw subError;
-      }
-
-      if (!submissions || submissions.length === 0) {
-        return [];
-      }
-
-      const { data: files, error: filesError } = await supabase
-        .from('files')
-        .select('*')
-        .order('created_at', { ascending: true });
-
-      if (filesError) {
-        console.error('Supabase query error on files table:', filesError);
-      }
-
-      const filesMap = new Map<string, FileMetadata[]>();
-      (files || []).forEach((file: FileMetadata) => {
-        const list = filesMap.get(file.submission_id) || [];
-        list.push(file);
-        filesMap.set(file.submission_id, list);
-      });
-
-      return submissions.map((sub: Submission) => ({
-        ...sub,
-        files: filesMap.get(sub.id) || [],
-      }));
-    } catch (err) {
-      console.error('Supabase getAllSubmissions failed:', err);
-      return await readLocalSubmissions();
+    if (subError) {
+      console.warn('Supabase query error on submissions table:', subError);
+      return null;
     }
+
+    if (!submissions || submissions.length === 0) {
+      return [];
+    }
+
+    const { data: files, error: filesError } = await supabase
+      .from('files')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (filesError) {
+      console.warn('Supabase query error on files table:', filesError);
+    }
+
+    const filesMap = new Map<string, FileMetadata[]>();
+    (files || []).forEach((file: FileMetadata) => {
+      const list = filesMap.get(file.submission_id) || [];
+      list.push(file);
+      filesMap.set(file.submission_id, list);
+    });
+
+    return submissions.map((sub: Submission) => ({
+      ...sub,
+      files: filesMap.get(sub.id) || [],
+    }));
+  } catch (err) {
+    console.warn('Supabase fetch failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Get all submissions:
+ * 1. Primary: Read from Google Drive (submissions.json)
+ * 2. If not yet in Google Drive: Read from Supabase and automatically migrate to Google Drive!
+ * 3. Fallback: Local persistent JSON file
+ */
+export async function getAllSubmissions(): Promise<Submission[]> {
+  // 1. Try reading from Google Drive
+  const driveSubmissions = await readSubmissionsFromDrive();
+  if (driveSubmissions !== null) {
+    return driveSubmissions;
   }
 
-  return await readLocalSubmissions();
+  // 2. Not in Google Drive yet -> Check Supabase to perform automatic migration!
+  const supabaseSubmissions = await getSupabaseSubmissions();
+  if (supabaseSubmissions !== null && supabaseSubmissions.length > 0) {
+    console.log(`[Drive DB Migration] Auto-migrating ${supabaseSubmissions.length} memories from Supabase to Google Drive...`);
+    await writeSubmissionsToDrive(supabaseSubmissions);
+    return supabaseSubmissions;
+  }
+
+  // 3. Fallback to local file
+  const local = await readLocalSubmissions();
+  if (local.length > 0) {
+    await writeSubmissionsToDrive(local);
+    return local;
+  }
+
+  return [];
 }
 
 export async function createSubmission(payload: ContributorSubmissionPayload): Promise<Submission> {
-  const supabase = getSupabaseClient();
   const submissionId = `sub_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const now = new Date().toISOString();
 
@@ -113,10 +144,21 @@ export async function createSubmission(payload: ContributorSubmissionPayload): P
     })),
   };
 
+  // 1. Get current submissions list
+  const current = await getAllSubmissions();
+  current.unshift(newSubmission);
+
+  // 2. Primary: Save to Google Drive
+  const driveSuccess = await writeSubmissionsToDrive(current);
+  if (!driveSuccess) {
+    console.warn('Drive write failed, using local backup.');
+  }
+
+  // 3. Best-effort mirror to Supabase (if online)
+  const supabase = getSupabaseClient();
   if (supabase) {
-    const { error: subError } = await supabase
-      .from('submissions')
-      .insert({
+    try {
+      await supabase.from('submissions').insert({
         id: submissionId,
         display_name: displayName,
         internal_name: internalName,
@@ -125,46 +167,36 @@ export async function createSubmission(payload: ContributorSubmissionPayload): P
         created_at: now,
       });
 
-    if (subError) {
-      console.error('CRITICAL: Supabase insert error on submissions:', subError);
-      throw new Error(`Database insert failed: ${subError.message}`);
-    }
-
-    if (payload.files.length > 0) {
-      const fileRows = newSubmission.files!.map((f) => ({
-        id: f.id,
-        submission_id: submissionId,
-        storage_provider: f.storage_provider,
-        storage_account: f.storage_account,
-        storage_file_id: f.storage_file_id,
-        original_filename: f.original_filename,
-        mime_type: f.mime_type,
-        file_size: f.file_size,
-        created_at: now,
-      }));
-
-      const { error: fileError } = await supabase.from('files').insert(fileRows);
-      if (fileError) {
-        console.error('CRITICAL: Supabase insert error on files:', fileError);
-        throw new Error(`File metadata insert failed: ${fileError.message}`);
+      if (payload.files.length > 0) {
+        const fileRows = newSubmission.files!.map((f) => ({
+          id: f.id,
+          submission_id: submissionId,
+          storage_provider: f.storage_provider,
+          storage_account: f.storage_account,
+          storage_file_id: f.storage_file_id,
+          original_filename: f.original_filename,
+          mime_type: f.mime_type,
+          file_size: f.file_size,
+          created_at: now,
+        }));
+        await supabase.from('files').insert(fileRows);
       }
+    } catch (err) {
+      console.warn('Supabase background insert note (non-critical):', err);
     }
   }
 
-  // Local fallback
-  const current = await readLocalSubmissions();
-  current.unshift(newSubmission);
+  // 4. Local fallback backup
   await writeLocalSubmissions(current);
 
   return newSubmission;
 }
 
 export async function deleteSubmission(submissionId: string): Promise<boolean> {
-  const supabase = getSupabaseClient();
-  const current = await readLocalSubmissions();
+  const current = await getAllSubmissions();
   const targetSub = current.find((s) => s.id === submissionId);
 
-  // Delete attached physical files from Google Drive / storage
+  // 1. Delete physical files from Google Drive
   if (targetSub && targetSub.files && targetSub.files.length > 0) {
     const storageProvider = getStorageProvider();
     for (const file of targetSub.files) {
@@ -176,22 +208,27 @@ export async function deleteSubmission(submissionId: string): Promise<boolean> {
     }
   }
 
+  // 2. Filter from list and update Google Drive
+  const filtered = current.filter((s) => s.id !== submissionId);
+  await writeSubmissionsToDrive(filtered);
+
+  // 3. Best-effort mirror delete from Supabase
+  const supabase = getSupabaseClient();
   if (supabase) {
     try {
       await supabase.from('submissions').delete().eq('id', submissionId);
     } catch (err) {
-      console.error('Supabase delete failed:', err);
+      console.warn('Supabase delete error (non-critical):', err);
     }
   }
 
-  const filtered = current.filter((s) => s.id !== submissionId);
+  // 4. Local update
   await writeLocalSubmissions(filtered);
   return true;
 }
 
 export async function deleteFile(fileId: string): Promise<boolean> {
-  const supabase = getSupabaseClient();
-  const current = await readLocalSubmissions();
+  const current = await getAllSubmissions();
 
   let targetStorageFileId: string | null = null;
   current.forEach((sub) => {
@@ -210,19 +247,25 @@ export async function deleteFile(fileId: string): Promise<boolean> {
     }
   }
 
-  if (supabase) {
-    try {
-      await supabase.from('files').delete().or(`id.eq.${fileId},storage_file_id.eq.${fileId}`);
-    } catch (err) {
-      console.error('Supabase file delete failed:', err);
-    }
-  }
-
   const updated = current.map((sub) => ({
     ...sub,
     files: (sub.files || []).filter((f) => f.id !== fileId && f.storage_file_id !== fileId),
   }));
 
+  // Update Google Drive
+  await writeSubmissionsToDrive(updated);
+
+  // Best-effort Supabase
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('files').delete().or(`id.eq.${fileId},storage_file_id.eq.${fileId}`);
+    } catch (err) {
+      console.warn('Supabase file delete error (non-critical):', err);
+    }
+  }
+
+  // Local update
   await writeLocalSubmissions(updated);
   return true;
 }

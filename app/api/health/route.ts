@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/lib/db/supabase';
+import { getAllSubmissions } from '@/lib/db/repository';
+import { readSubmissionsFromDrive } from '@/lib/db/drive-db';
 import { google } from 'googleapis';
 
 export const dynamic = 'force-dynamic';
@@ -22,28 +24,12 @@ export async function GET() {
       has_GOOGLE_DRIVE_ROOT_FOLDER_ID: Boolean(process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID),
       has_GOOGLE_REFRESH_TOKEN: Boolean(process.env.GOOGLE_REFRESH_TOKEN),
     },
-    supabaseStatus: 'untested',
+    driveDatabaseStatus: 'untested',
     googleDriveStatus: 'untested',
+    supabaseStatus: 'untested',
   };
 
-  // Test Supabase
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    diagnostics.supabaseStatus = 'FAILED: Supabase environment variables are missing on Vercel.';
-  } else {
-    try {
-      const { data, error } = await supabase.from('submissions').select('id');
-      if (error) {
-        diagnostics.supabaseStatus = `ERROR from Supabase: ${error.message} (code: ${error.code})`;
-      } else {
-        diagnostics.supabaseStatus = `CONNECTED: Successfully queried 'submissions' table! Found ${data.length} existing memories.`;
-      }
-    } catch (err: any) {
-      diagnostics.supabaseStatus = `EXCEPTION connecting to Supabase: ${err.message}`;
-    }
-  }
-
-  // Test Google Drive
+  // Test Google Drive & Drive Database
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
@@ -65,6 +51,32 @@ export async function GET() {
       }
     } catch (err: any) {
       diagnostics.googleDriveStatus = `ERROR from Google Drive: ${err.message}`;
+    }
+  }
+
+  // Test Primary Database (Google Drive Database with Auto-Migration)
+  try {
+    const all = await getAllSubmissions();
+    const inDrive = await readSubmissionsFromDrive();
+    diagnostics.driveDatabaseStatus = `ACTIVE: Total ${all.length} memories loaded. Synced in Google Drive submissions.json: ${inDrive !== null ? 'YES' : 'NO'}`;
+  } catch (err: any) {
+    diagnostics.driveDatabaseStatus = `ERROR: ${err.message}`;
+  }
+
+  // Test Supabase (Optional fallback)
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    diagnostics.supabaseStatus = 'OPTIONAL: Not configured (Safe - Drive database handles all storage).';
+  } else {
+    try {
+      const { data, error } = await supabase.from('submissions').select('id');
+      if (error) {
+        diagnostics.supabaseStatus = `PAUSED / INACTIVE (Safe: Drive database handles all storage): ${error.message}`;
+      } else {
+        diagnostics.supabaseStatus = `CONNECTED: Found ${data.length} memories in Supabase.`;
+      }
+    } catch (err: any) {
+      diagnostics.supabaseStatus = `NOTICE: ${err.message}`;
     }
   }
 

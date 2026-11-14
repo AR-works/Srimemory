@@ -5,7 +5,7 @@ import { StorageProvider, UploadResult, FileCategory, detectFileCategory } from 
 let cachedDriveClient: drive_v3.Drive | null = null;
 const folderCache: Record<string, string> = {};
 
-function getDriveClient(): drive_v3.Drive {
+export function getDriveClient(): drive_v3.Drive {
   if (cachedDriveClient) return cachedDriveClient;
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
